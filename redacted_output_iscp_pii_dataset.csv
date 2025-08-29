@@ -1,0 +1,72 @@
+import sys
+import pandas as pd
+import json
+import re
+
+# ---------------------------
+# Helper Functions to Mask PII
+# ---------------------------
+
+def mask_phone(phone):
+    return phone[:2] + "XXXXXX" + phone[-2:]
+
+def mask_aadhar(aadhar):
+    return aadhar[:4] + " XXXX XXXX"
+
+def mask_passport(passport):
+    return passport[0] + "XXXXXXX"
+
+def mask_upi(upi):
+    parts = upi.split('@')
+    masked_user = parts[0][:2] + "XXX" if len(parts[0]) > 2 else "XXX"
+    return masked_user + "@" + parts[1]
+
+def mask_name(name):
+    parts = name.split()
+    masked = [p[0] + "X"*(len(p)-1) if len(p)>1 else p for p in parts]
+    return " ".join(masked)
+
+def mask_email(email):
+    user, domain = email.split("@")
+    masked_user = user[:2] + "XXX" if len(user) > 2 else "XXX"
+    return masked_user + "@" + domain
+
+def mask_address(address):
+    return "[REDACTED_ADDRESS]"
+
+def mask_ip(ip):
+    return "[REDACTED_IP]"
+
+def mask_device(device):
+    return "[REDACTED_DEVICE]"
+
+# ---------------------------
+# PII Detection Function
+# ---------------------------
+
+def detect_pii(record):
+    pii_flags = []
+    redacted = record.copy()
+
+    # Standalone PII
+    if 'phone' in record and re.fullmatch(r'\d{10}', str(record['phone'])):
+        redacted['phone'] = mask_phone(str(record['phone']))
+        pii_flags.append(True)
+    if 'aadhar' in record and re.fullmatch(r'\d{12}', str(record['aadhar'])):
+        redacted['aadhar'] = mask_aadhar(str(record['aadhar']))
+        pii_flags.append(True)
+    if 'passport' in record and re.fullmatch(r'[A-Z]\d{7}', str(record['passport'])):
+        redacted['passport'] = mask_passport(str(record['passport']))
+        pii_flags.append(True)
+    if 'upi_id' in record and re.fullmatch(r'[\w\d]+@[\w\d]+', str(record['upi_id'])):
+        redacted['upi_id'] = mask_upi(str(record['upi_id']))
+        pii_flags.append(True)
+
+    # Combinatorial PII: need 2+ fields from B
+    combinatorial_fields = ['name', 'email', 'address', 'device_id', 'ip_address']
+    present_fields = [f for f in combinatorial_fields if f in record and record[f]]
+    if len(present_fields) >= 2:
+        for f in present_fields:
+            if f == 'name':
+                redacted[f] = mask_name(str(record[f]))
+            elif f == 'em
